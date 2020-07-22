@@ -1,0 +1,78 @@
+version: '3'
+volumes:
+  dados:
+networks:
+  banco:
+  web:
+  fila:
+services:
+  db:
+    image: postgres:13
+    environment: 
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=email_sender
+      - POSTGRES_PASSWORD=pass@teste
+    volumes:
+      # Volume dos dados
+      - dados:/var/lib/postgresql/data
+      # Scripts
+      - ./scripts:/scripts
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - banco
+  admin-db:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "digao@yahoo.com.br"
+      PGADMIN_DEFAULT_PASSWORD: "admin"
+    ports:
+      - "16543:80"
+    depends_on:
+      - db
+    networks:
+      - banco
+  frontend:
+    image: nginx:1.13
+    volumes:
+      # Site
+      - ./web:/usr/share/nginx/html/
+      # Configuração do proxy reverso
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    ports:
+      - 80:80
+    networks:
+      - web
+    depends_on:
+      - app
+  app:
+    image: python:3.6
+    volumes:
+      # Aplicação
+      - ./app:/app
+    working_dir: /app
+    command: bash ./app.sh
+    networks:
+      - banco
+      - web
+      - fila
+    depends_on:
+      - db
+      - queue
+    environment: 
+      - DB_NAME=email_sender2
+  queue:
+    image: redis:3.2
+    networks: 
+      - fila
+  worker:
+    build: worker
+    volumes: 
+    # worker
+      - ./worker:/worker
+    working_dir: /worker
+    command: worker.py
+    networks: 
+      - fila
+    depends_on: 
+      - queue
+ 
